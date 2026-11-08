@@ -1,0 +1,50 @@
+name: Fix HyperOS ROM
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: "ROM zip ka direct link"
+        required: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android
+
+      - name: Extract scripts
+        run: unzip -q rom-fixer.zip
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y brotli e2fsprogs zip unzip xxd python3-pip
+          pip install gdown
+          git clone --depth 1 https://github.com/xpirt/sdat2img rom-fixer/tools/sdat2img
+          git clone --depth 1 https://github.com/xpirt/img2sdat rom-fixer/tools/img2sdat
+
+      - name: Download ROM
+        env:
+          ROM_URL: ${{ inputs.rom_url }}
+        run: |
+          if [[ "$ROM_URL" == *drive.google.com* ]]; then
+            gdown --fuzzy "$ROM_URL" -O rom.zip
+          else
+            wget -q -O rom.zip "$ROM_URL"
+          fi
+
+      - name: Patch ROM
+        run: bash rom-fixer/scripts/fix_rom.sh rom.zip work
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patched-rom
+          path: |
+            work/patched.zip
+            work/report.txt
+          compression-level: 0
+          retention-days: 3
